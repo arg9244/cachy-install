@@ -3,7 +3,8 @@
 # CachyOS Fresh Install Setup Script
 # Configures a minimal CachyOS installation that boots to TTY
 
-set -e
+# Note: Removed 'set -e' to prevent early exit on non-critical failures
+# Individual commands have proper error handling instead
 
 echo "Starting CachyOS TTY setup script..."
 
@@ -268,13 +269,13 @@ else
     print_status "No essential packages need to be installed"
 fi
 
-# Enable transmission-daemon service (if transmission-cli is installed)
+# Enable transmission service (if transmission-cli is installed)
 if pacman -Qi transmission-cli &>/dev/null; then
-    print_status "Enabling transmission-daemon service..."
-    if sudo systemctl enable transmission-daemon.service; then
-        print_status "Enabled transmission-daemon.service to start at boot"
+    print_status "Enabling transmission service..."
+    if sudo systemctl enable transmission.service; then
+        print_status "Enabled transmission.service to start at boot"
     else
-        print_warning "Could not enable transmission-daemon.service. You may need to enable it manually."
+        print_warning "Could not enable transmission.service. You may need to enable it manually."
     fi
 fi
 
@@ -291,7 +292,7 @@ gaming_packages=(
 
 echo -e "\n${YELLOW}[OPTIONAL]${NC} Install gaming packages?"
 echo "Packages: ${gaming_packages[*]}"
-read -p "Install gaming packages? [y/N]: " -r gaming_choice
+read -p "Install gaming packages? [y/N]: " -r gaming_choice < /dev/tty
 
 if [[ $gaming_choice =~ ^[Yy]$ ]]; then
     # Filter out already installed gaming packages
@@ -324,7 +325,7 @@ gnome_packages=(
 
 echo -e "\n${YELLOW}[OPTIONAL]${NC} Install minimal GNOME desktop environment?"
 echo "Packages: ${gnome_packages[*]}"
-read -p "Install minimal GNOME? [y/N]: " -r gnome_choice
+read -p "Install minimal GNOME? [y/N]: " -r gnome_choice < /dev/tty
 
 if [[ $gnome_choice =~ ^[Yy]$ ]]; then
     # Filter out already installed GNOME packages
@@ -359,7 +360,7 @@ if [[ ! $gnome_choice =~ ^[Yy]$ ]]; then
     echo -e "\n${YELLOW}[OPTIONAL]${NC} Install and enable SDDM display manager?"
     echo "Package: sddm"
     print_warning "Note: SDDM themes may not apply correctly on some systems"
-    read -p "Install and enable SDDM? [y/N]: " -r sddm_choice
+read -p "Install and enable SDDM? [y/N]: " -r sddm_choice < /dev/tty
     
     if [[ $sddm_choice =~ ^[Yy]$ ]]; then
         # Check if SDDM is already installed
@@ -389,28 +390,22 @@ else
     print_status "Skipped SDDM (GNOME with GDM was selected)"
 fi
 
-# Apply dotfiles with chezmoi
+# Apply dotfiles with chezmoi (run as the current user)
 print_status "Setting up dotfiles with chezmoi..."
 print_warning "This will apply dotfiles from https://github.com/arg9244/dotfiles.git to your home directory"
 
-# Get the actual user (not root) to apply dotfiles to their home
-if [ "$SUDO_USER" ]; then
-    ACTUAL_USER="$SUDO_USER"
-    USER_HOME="$(eval echo ~$SUDO_USER)"
-else
-    print_error "Could not determine the actual user. Dotfiles setup skipped."
-    print_error "Run 'chezmoi init --apply https://github.com/arg9244/dotfiles.git' manually as your user later."
-    ACTUAL_USER=""
-fi
-
-if [ "$ACTUAL_USER" ]; then
-    print_status "Applying dotfiles for user: $ACTUAL_USER to $USER_HOME"
-    if sudo -u "$ACTUAL_USER" chezmoi init --apply https://github.com/arg9244/dotfiles.git; then
+# Since this script runs as a regular user with sudo for privileged commands,
+# simply apply chezmoi as the current user.
+if command -v chezmoi &>/dev/null; then
+    if chezmoi init --apply https://github.com/arg9244/dotfiles.git; then
         print_status "Dotfiles applied successfully with chezmoi"
     else
         print_error "Failed to apply dotfiles with chezmoi"
         print_warning "You can manually run: chezmoi init --apply https://github.com/arg9244/dotfiles.git"
     fi
+else
+    print_error "chezmoi is not installed. Skipping dotfiles setup."
+    print_warning "Install chezmoi and then run: chezmoi init --apply https://github.com/arg9244/dotfiles.git"
 fi
 
 print_status "CachyOS setup script completed successfully!"
