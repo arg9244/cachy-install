@@ -8,6 +8,11 @@
 
 echo "Starting CachyOS TTY setup script..."
 
+# Attach stdin to the terminal so prompts work even with curl | bash
+if [ ! -t 0 ] && [ -r /dev/tty ]; then
+    exec 0</dev/tty
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -84,6 +89,27 @@ filter_installed_packages() {
     
     # Return the packages to install via global array
     FILTERED_PACKAGES=("${to_install[@]}")
+}
+
+# Robust yes/no prompt that blocks until valid input.
+# Usage: prompt_yes_no "Question [y/N]:" default_answer
+# Returns 0 for yes, 1 for no.
+prompt_yes_no() {
+    local prompt_msg="$1"
+    local default_ans="$2" # 'y' or 'n'
+    local reply
+    while true; do
+        # shellcheck disable=SC2162
+        read -p "$prompt_msg " -r reply || reply=""
+        if [[ -z "$reply" ]]; then
+            reply="$default_ans"
+        fi
+        case "$reply" in
+            [Yy]|[Yy][Ee][Ss]) return 0 ;;
+            [Nn]|[Nn][Oo]) return 1 ;;
+            *) print_warning "Please answer y or n." ;;
+        esac
+    done
 }
 
 print_status "Configuring pacman for optimal performance..."
@@ -292,9 +318,7 @@ gaming_packages=(
 
 echo -e "\n${YELLOW}[OPTIONAL]${NC} Install gaming packages?"
 echo "Packages: ${gaming_packages[*]}"
-read -p "Install gaming packages? [y/N]: " -r gaming_choice < /dev/tty
-
-if [[ $gaming_choice =~ ^[Yy]$ ]]; then
+if prompt_yes_no "Install gaming packages? [y/N]:" "n"; then
     # Filter out already installed gaming packages
     filter_installed_packages "${gaming_packages[@]}"
     
@@ -325,9 +349,7 @@ gnome_packages=(
 
 echo -e "\n${YELLOW}[OPTIONAL]${NC} Install minimal GNOME desktop environment?"
 echo "Packages: ${gnome_packages[*]}"
-read -p "Install minimal GNOME? [y/N]: " -r gnome_choice < /dev/tty
-
-if [[ $gnome_choice =~ ^[Yy]$ ]]; then
+if prompt_yes_no "Install minimal GNOME? [y/N]:" "n"; then
     # Filter out already installed GNOME packages
     filter_installed_packages "${gnome_packages[@]}"
     
@@ -360,9 +382,7 @@ if [[ ! $gnome_choice =~ ^[Yy]$ ]]; then
     echo -e "\n${YELLOW}[OPTIONAL]${NC} Install and enable SDDM display manager?"
     echo "Package: sddm"
     print_warning "Note: SDDM themes may not apply correctly on some systems"
-read -p "Install and enable SDDM? [y/N]: " -r sddm_choice < /dev/tty
-    
-    if [[ $sddm_choice =~ ^[Yy]$ ]]; then
+    if prompt_yes_no "Install and enable SDDM? [y/N]:" "n"; then
         # Check if SDDM is already installed
         if pacman -Qi sddm &>/dev/null; then
             print_status "SDDM is already installed!"
