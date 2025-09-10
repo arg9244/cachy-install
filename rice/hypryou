@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_OWNER="koeqaife"
+REPO_NAME="hyprland-material-you"
+API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest"
+ARCH=$(uname -m)
+TMPDIR=$(mktemp -d -t hypryou-prebuilt-XXXXXXXX)
+
+cleanup() {
+  rm -rf "$TMPDIR"
+}
+trap cleanup EXIT
+
+need_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+log() { printf "[hypryou] %s\n" "$*"; }
+err() { printf "[hypryou][error] %s\n" "$*" >&2; }
+
+require_root_or_sudo() {
+  if [[ $EUID -ne 0 ]]; then
+    if need_cmd sudo; then
+      SUDO=(sudo)
+    else
+      err "This script needs root privileges (pacman/systemctl). Install sudo or run as root."; exit 1
+    fi
+  else
+    SUDO=()
+  fi
+}
+
+fetch_latest_urls() {
+  # Fetch latest release info and extract .pkg.tar.zst URLs without jq
+  if ! need_cmd curl; then
+    err "curl is required"; exit 1
+  fi
+  log "Fetching latest release metadata…"
+  local json
+  if ! json=$(curl -fsSL "$API_URL"); then
+    err "Failed to fetch GitHub API: $API_URL"; exit 1
+  fi
+
+  # Extract all .pkg.tar.zst URLs
+  mapfile -t all_urls < <(printf '%s' "$json" | sed -n 's/.*"browser_download_url"\s*:\s*"\(https:\/\/[^"]*pkg\.tar\.zst\)".*/\1/p')
+  if [[ ${#all_urls[@]} -eq 0 ]]; then
+    err "No release packages (.pkg.tar.zst) found in latest release."; exit 1
+  fi
+
+  # Prefer architecture-specific URLs if present
+  mapfile -t arch_urls < <(printf '%s\n' "${all_urls[@]}" | grep -iE "${ARCH}\.pkg\.tar\.zst$" || true)
+  if [[ ${#arch_urls[@]} -gt 0 ]]; then
+    printf '%s\n' "${arch_urls[@]}"
+  else
+    printf '%s\n' "${all_urls[@]}"
+  fi
+}
+
+download_packages() {
+  local urls=("$@")
+  cd "$TMPDIR"
+  log "Downloading packages to $TMPDIR…"
+  for url in "${urls[@]}"; do
+    log "Downloading $(basename "$url")"
+    curl -fL --retry 3 --retry-delay 2 -O "$url"
+  done
+}
+
+install_packages() {
+  require_root_or_sudo
+  cd "$TMPDIR"
+
+  # Optionally ensure greetd package is available if not a dependency
+  if ! pacman -Q greetd >/dev/null 2>&1; then
+    log "Installing greetd (required for the greeter/service)…"
+    "${SUDO[@]}" pacman -S --noconfirm --needed greetd || true
+  fi
+
+  log "Installing HyprYou packages with pacman -U…"
+  # Install all .pkg.tar.zst in the temp dir
+  "${SUDO[@]}" pacman -U --noconfirm --needed ./*.pkg.tar.zst
+}
+
+enable_greetd() {
+  require_root_or_sudo
+  log "Enabling greetd service…"
+  "${SUDO[@]}" systemctl enable greetd
+  log "greetd has been enabled. On next boot, select the 'HyprYou' session."
+}
+
+main() {
+  log "Detected architecture: ${ARCH}"
+  mapfile -t urls < <(fetch_latest_urls)
+
+  # Optionally filter to expected package names if present
+  # Prefer main + greeter + utils if they exist among URLs
+  declare -a filtered=()
+  for name in hypryou hypryou-greeter hypryou-utils; do
+    match=$(printf '%s\n' "${urls[@]}" | grep -E "/${name}-[^/]*\.pkg\.tar\.zst$" || true)
+    if [[ -n "$match" ]]; then
+      while IFS= read -r url; do
+        filtered+=("$url")
+      done <<< "$match"
+    fi
+  done
+  if [[ ${#filtered[@]} -eq 0 ]]; then
+    filtered=("${urls[@]}")
+  fi
+
+  download_packages "${filtered[@]}"
+  install_packages
+  enable_greetd
+  log "Installation complete."
+  log "Notes: Do not enable SDDM/GDM alongside greetd. If you use GNOME on this system, enable only GDM per your rule."
+}
+
+main "$@"
+
