@@ -25,37 +25,59 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if running as root, if not, re-run with sudo
-if [[ $EUID -ne 0 ]]; then
-   print_status "Script requires root privileges. Requesting sudo access..."
-   exec sudo "$0" "$@"
+# Check if running as root
+if [[ $EUID -eq 0 ]]; then
+   print_error "This script should not be run as root"
+   exit 1
 fi
+
+# Ensure sudo is available and working
+if ! command -v sudo &> /dev/null; then
+    print_warning "sudo not found. Installing sudo..."
+    pacman -S --noconfirm sudo || { print_error "Failed to install sudo. Please install it manually and re-run."; exit 1; }
+fi
+
+# Validate sudo privileges (non-interactive test)
+if ! sudo -n true 2>/dev/null; then
+    print_warning "We need sudo access to continue."
+    print_warning "You may be prompted for your password now."
+    sudo -v || { print_error "Sudo authentication failed. Exiting."; exit 1; }
+    # Keep sudo alive during the script
+    ( while true; do sudo -n true; sleep 60; done ) >/dev/null 2>&1 &
+    SUDO_KEEPALIVE_PID=$!
+fi
+
+# At script end, stop keepalive
+cleanup() {
+    [[ -n "$SUDO_KEEPALIVE_PID" ]] && kill "$SUDO_KEEPALIVE_PID" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
 print_status "Configuring pacman for optimal performance..."
 
 # Backup original pacman.conf
-cp /etc/pacman.conf /etc/pacman.conf.backup
+sudo cp /etc/pacman.conf /etc/pacman.conf.backup
 print_status "Backed up original pacman.conf to /etc/pacman.conf.backup"
 
 # Enable 16 parallel downloads in pacman.conf
 if grep -q "^ParallelDownloads" /etc/pacman.conf; then
-    sed -i 's/^ParallelDownloads.*/ParallelDownloads = 16/' /etc/pacman.conf
+    sudo sed -i 's/^ParallelDownloads.*/ParallelDownloads = 16/' /etc/pacman.conf
     print_status "Updated ParallelDownloads to 16"
 else
     # Add ParallelDownloads if it doesn't exist
-    sed -i '/^#ParallelDownloads/a ParallelDownloads = 16' /etc/pacman.conf
+    sudo sed -i '/^#ParallelDownloads/a ParallelDownloads = 16' /etc/pacman.conf
     print_status "Added ParallelDownloads = 16 to pacman.conf"
 fi
 
 # Enable Color if not already enabled
 if ! grep -q "^Color" /etc/pacman.conf; then
-    sed -i 's/^#Color/Color/' /etc/pacman.conf
+    sudo sed -i 's/^#Color/Color/' /etc/pacman.conf
     print_status "Enabled colored output in pacman"
 fi
 
 # Enable ILoveCandy if not already enabled
 if ! grep -q "^ILoveCandy" /etc/pacman.conf; then
-    sed -i '/^Color/a ILoveCandy' /etc/pacman.conf
+    sudo sed -i '/^Color/a ILoveCandy' /etc/pacman.conf
     print_status "Enabled progress bar candy in pacman"
 fi
 
@@ -63,14 +85,14 @@ print_status "Installing reflector for mirror optimization..."
 
 # Install reflector if not already installed
 if ! command -v reflector &> /dev/null; then
-    pacman -S --noconfirm reflector
+    sudo pacman -S --noconfirm reflector
     print_status "Reflector installed successfully"
 else
     print_status "Reflector is already installed"
 fi
 
 print_status "Backing up current mirrorlist..."
-cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
+sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
 
 print_status "Finding fastest mirrors with reflector..."
 print_warning "This may take up to 30 seconds..."
@@ -82,7 +104,7 @@ print_warning "This may take up to 30 seconds..."
 # --save: Save to mirrorlist
 # --connection-timeout 3: 3 second timeout for connections
 # --download-timeout 30: 30 second total timeout
-reflector --latest 20 \
+sudo reflector --latest 20 \
           --protocol https \
           --sort rate \
           --save /etc/pacman.d/mirrorlist \
@@ -94,21 +116,21 @@ if [ $? -eq 0 ]; then
     print_status "Updated mirrorlist saved to /etc/pacman.d/mirrorlist"
 else
     print_error "Mirror optimization failed, restoring backup"
-    cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist
+    sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist
     exit 1
 fi
 
 print_status "Updating package database with new mirrors..."
-pacman -Sy
+sudo pacman -Sy
 
 print_status "Configuring fstab to automount specified drives..."
 
 # Backup /etc/fstab
-cp /etc/fstab /etc/fstab.backup
+sudo cp /etc/fstab /etc/fstab.backup
 print_status "Backed up /etc/fstab to /etc/fstab.backup"
 
 # Ensure mount points exist
-mkdir -p /mnt/C /mnt/D /mnt/E
+sudo mkdir -p /mnt/C /mnt/D /mnt/E
 print_status "Ensured mount points exist: /mnt/C /mnt/D /mnt/E"
 
 # Helper to append a line to fstab if it doesn't already exist
@@ -118,7 +140,7 @@ append_fstab_line() {
     if grep -qxF "$line" /etc/fstab; then
         print_warning "Entry already present in /etc/fstab: $line"
     else
-        echo "$line" >> /etc/fstab
+        echo "$line" | sudo tee -a /etc/fstab > /dev/null
         print_status "Added to /etc/fstab: $line"
     fi
 }
@@ -128,11 +150,11 @@ append_fstab_line "/dev/sdb3    /mnt/E    auto    defaults,nofail    0 0"
 append_fstab_line "/dev/nvme0n1p3    /mnt/C    auto    defaults,nofail    0 0"
 
 print_status "Testing fstab by mounting all entries..."
-if mount -a; then
+if sudo mount -a; then
     print_status "fstab entries mounted successfully"
 else
     print_error "mount -a failed. Restoring /etc/fstab from backup."
-    cp /etc/fstab.backup /etc/fstab
+    sudo cp /etc/fstab.backup /etc/fstab
     exit 1
 fi
 
@@ -140,12 +162,12 @@ print_status "Configuring environment variables for AMD GPU optimization..."
 
 # Edit /etc/environment to add AMD optimization variables
 if ! grep -q "^AMD_VULKAN_ICD=" /etc/environment; then
-    echo "AMD_VULKAN_ICD=RADV" | tee -a /etc/environment > /dev/null
+    echo "AMD_VULKAN_ICD=RADV" | sudo tee -a /etc/environment > /dev/null
     print_status "Added AMD_VULKAN_ICD=RADV to /etc/environment"
 fi
 
 if ! grep -q "^MESA_SHADER_CACHE_MAX_SIZE=" /etc/environment; then
-    echo "MESA_SHADER_CACHE_MAX_SIZE=12G" | tee -a /etc/environment > /dev/null
+    echo "MESA_SHADER_CACHE_MAX_SIZE=12G" | sudo tee -a /etc/environment > /dev/null
     print_status "Added MESA_SHADER_CACHE_MAX_SIZE=12G to /etc/environment"
 fi
 
@@ -184,12 +206,12 @@ print_status "Installing ${#essential_packages[@]} essential packages..."
 print_warning "This may take several minutes depending on your internet connection..."
 
 # Install essential packages
-if pacman -S --noconfirm "${essential_packages[@]}"; then
+if sudo pacman -S --noconfirm "${essential_packages[@]}"; then
     print_status "Essential packages installed successfully"
     
     # Enable transmission-daemon service
     print_status "Enabling transmission-daemon service..."
-    if systemctl enable transmission-daemon.service; then
+    if sudo systemctl enable transmission-daemon.service; then
         print_status "Enabled transmission-daemon.service to start at boot"
     else
         print_warning "Could not enable transmission-daemon.service. You may need to enable it manually."
@@ -216,7 +238,7 @@ read -p "Install gaming packages? [y/N]: " -r gaming_choice
 
 if [[ $gaming_choice =~ ^[Yy]$ ]]; then
     print_status "Installing gaming packages..."
-    if pacman -S --noconfirm "${gaming_packages[@]}"; then
+    if sudo pacman -S --noconfirm "${gaming_packages[@]}"; then
         print_status "Gaming packages installed successfully"
     else
         print_error "Failed to install some gaming packages"
@@ -242,10 +264,10 @@ read -p "Install minimal GNOME? [y/N]: " -r gnome_choice
 
 if [[ $gnome_choice =~ ^[Yy]$ ]]; then
     print_status "Installing minimal GNOME desktop environment packages..."
-    if pacman -S --noconfirm "${gnome_packages[@]}"; then
+    if sudo pacman -S --noconfirm "${gnome_packages[@]}"; then
         print_status "Minimal GNOME packages installed successfully"
         # Per user rule: only enable gdm when GNOME is selected
-        if systemctl enable gdm.service; then
+        if sudo systemctl enable gdm.service; then
             print_status "Enabled gdm.service to start at boot"
         else
             print_warning "Could not enable gdm.service. You may need to enable it manually."
@@ -266,9 +288,9 @@ if [[ ! $gnome_choice =~ ^[Yy]$ ]]; then
     
     if [[ $sddm_choice =~ ^[Yy]$ ]]; then
         print_status "Installing SDDM display manager..."
-        if pacman -S --noconfirm sddm; then
+        if sudo pacman -S --noconfirm sddm; then
             print_status "SDDM installed successfully"
-            if systemctl enable sddm.service; then
+            if sudo systemctl enable sddm.service; then
                 print_status "Enabled sddm.service to start at boot"
             else
                 print_warning "Could not enable sddm.service. You may need to enable it manually."
