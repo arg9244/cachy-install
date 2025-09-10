@@ -33,8 +33,18 @@ fi
 
 # Ensure sudo is available and working
 if ! command -v sudo &> /dev/null; then
-    print_warning "sudo not found. Installing sudo..."
-    pacman -S --noconfirm sudo || { print_error "Failed to install sudo. Please install it manually and re-run."; exit 1; }
+    print_warning "sudo not found. Attempting to install sudo..."
+    if command -v pkexec &> /dev/null; then
+        pkexec pacman -S --noconfirm sudo || true
+    fi
+    if ! command -v sudo &> /dev/null; then
+        print_warning "sudo not installed via pkexec. Trying su..."
+        su -c "pacman -S --noconfirm sudo" || true
+    fi
+    if ! command -v sudo &> /dev/null; then
+        print_error "Failed to install sudo using pkexec or su. Please install sudo manually (as root) and re-run."
+        exit 1
+    fi
 fi
 
 # Validate sudo privileges (non-interactive test)
@@ -107,7 +117,7 @@ print_status "Installing reflector for mirror optimization..."
 
 # Install reflector if not already installed
 if ! command -v reflector &> /dev/null; then
-    sudo pacman -S --noconfirm reflector
+    sudo pacman -S --needed --noconfirm reflector
     print_status "Reflector installed successfully"
 else
     print_status "Reflector is already installed"
@@ -189,7 +199,7 @@ if sudo mount -a; then
 else
     print_error "mount -a failed. Restoring /etc/fstab from backup."
     sudo cp /etc/fstab.backup /etc/fstab
-    exit 1
+    print_warning "fstab restored from backup. Please verify your drive identifiers and try again later. Proceeding with the rest of the setup..."
 fi
 
 print_status "Configuring environment variables for AMD GPU optimization..."
@@ -248,7 +258,7 @@ fi
 
 # Install essential packages (only if there are packages to install)
 if [ ${#FILTERED_PACKAGES[@]} -gt 0 ]; then
-    if sudo pacman -S --noconfirm "${FILTERED_PACKAGES[@]}"; then
+    if sudo pacman -S --needed --noconfirm "${FILTERED_PACKAGES[@]}"; then
         print_status "Essential packages installed successfully"
     else
         print_error "Failed to install some essential packages"
@@ -291,7 +301,7 @@ if [[ $gaming_choice =~ ^[Yy]$ ]]; then
         print_status "All gaming packages are already installed!"
     else
         print_status "Installing ${#FILTERED_PACKAGES[@]} gaming packages (${#gaming_packages[@]} total, skipping already installed)..."
-        if sudo pacman -S --noconfirm "${FILTERED_PACKAGES[@]}"; then
+        if sudo pacman -S --needed --noconfirm "${FILTERED_PACKAGES[@]}"; then
             print_status "Gaming packages installed successfully"
         else
             print_error "Failed to install some gaming packages"
@@ -324,7 +334,7 @@ if [[ $gnome_choice =~ ^[Yy]$ ]]; then
         print_status "All GNOME packages are already installed!"
     else
         print_status "Installing ${#FILTERED_PACKAGES[@]} GNOME packages (${#gnome_packages[@]} total, skipping already installed)..."
-        if sudo pacman -S --noconfirm "${FILTERED_PACKAGES[@]}"; then
+        if sudo pacman -S --needed --noconfirm "${FILTERED_PACKAGES[@]}"; then
             print_status "Minimal GNOME packages installed successfully"
         else
             print_error "Failed to install some GNOME packages"
@@ -357,7 +367,7 @@ if [[ ! $gnome_choice =~ ^[Yy]$ ]]; then
             print_status "SDDM is already installed!"
         else
             print_status "Installing SDDM display manager..."
-            if sudo pacman -S --noconfirm sddm; then
+            if sudo pacman -S --needed --noconfirm sddm; then
                 print_status "SDDM installed successfully"
             else
                 print_error "Failed to install SDDM"
