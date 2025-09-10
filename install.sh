@@ -53,6 +53,28 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Function to filter out already installed packages
+filter_installed_packages() {
+    local packages=("$@")
+    local to_install=()
+    local already_installed=()
+    
+    for pkg in "${packages[@]}"; do
+        if pacman -Qi "$pkg" &>/dev/null; then
+            already_installed+=("$pkg")
+        else
+            to_install+=("$pkg")
+        fi
+    done
+    
+    if [ ${#already_installed[@]} -gt 0 ]; then
+        print_status "Skipping already installed packages: ${already_installed[*]}"
+    fi
+    
+    # Return the packages to install via global array
+    FILTERED_PACKAGES=("${to_install[@]}")
+}
+
 print_status "Configuring pacman for optimal performance..."
 
 # Backup original pacman.conf
@@ -202,23 +224,36 @@ essential_packages=(
     ttf-meslo-nerd
 )
 
-print_status "Installing ${#essential_packages[@]} essential packages..."
-print_warning "This may take several minutes depending on your internet connection..."
+# Filter out already installed packages
+filter_installed_packages "${essential_packages[@]}"
 
-# Install essential packages
-if sudo pacman -S --noconfirm "${essential_packages[@]}"; then
-    print_status "Essential packages installed successfully"
-    
-    # Enable transmission-daemon service
+if [ ${#FILTERED_PACKAGES[@]} -eq 0 ]; then
+    print_status "All essential packages are already installed!"
+else
+    print_status "Installing ${#FILTERED_PACKAGES[@]} essential packages (${#essential_packages[@]} total, skipping already installed)..."
+    print_warning "This may take several minutes depending on your internet connection..."
+fi
+
+# Install essential packages (only if there are packages to install)
+if [ ${#FILTERED_PACKAGES[@]} -gt 0 ]; then
+    if sudo pacman -S --noconfirm "${FILTERED_PACKAGES[@]}"; then
+        print_status "Essential packages installed successfully"
+    else
+        print_error "Failed to install some essential packages"
+        print_error "You may need to install them manually later"
+    fi
+else
+    print_status "No essential packages need to be installed"
+fi
+
+# Enable transmission-daemon service (if transmission-cli is installed)
+if pacman -Qi transmission-cli &>/dev/null; then
     print_status "Enabling transmission-daemon service..."
     if sudo systemctl enable transmission-daemon.service; then
         print_status "Enabled transmission-daemon.service to start at boot"
     else
         print_warning "Could not enable transmission-daemon.service. You may need to enable it manually."
     fi
-else
-    print_error "Failed to install some essential packages"
-    print_error "You may need to install them manually later"
 fi
 
 # Optional package groups
@@ -237,11 +272,18 @@ echo "Packages: ${gaming_packages[*]}"
 read -p "Install gaming packages? [y/N]: " -r gaming_choice
 
 if [[ $gaming_choice =~ ^[Yy]$ ]]; then
-    print_status "Installing gaming packages..."
-    if sudo pacman -S --noconfirm "${gaming_packages[@]}"; then
-        print_status "Gaming packages installed successfully"
+    # Filter out already installed gaming packages
+    filter_installed_packages "${gaming_packages[@]}"
+    
+    if [ ${#FILTERED_PACKAGES[@]} -eq 0 ]; then
+        print_status "All gaming packages are already installed!"
     else
-        print_error "Failed to install some gaming packages"
+        print_status "Installing ${#FILTERED_PACKAGES[@]} gaming packages (${#gaming_packages[@]} total, skipping already installed)..."
+        if sudo pacman -S --noconfirm "${FILTERED_PACKAGES[@]}"; then
+            print_status "Gaming packages installed successfully"
+        else
+            print_error "Failed to install some gaming packages"
+        fi
     fi
 else
     print_status "Skipped gaming packages installation"
@@ -263,17 +305,28 @@ echo "Packages: ${gnome_packages[*]}"
 read -p "Install minimal GNOME? [y/N]: " -r gnome_choice
 
 if [[ $gnome_choice =~ ^[Yy]$ ]]; then
-    print_status "Installing minimal GNOME desktop environment packages..."
-    if sudo pacman -S --noconfirm "${gnome_packages[@]}"; then
-        print_status "Minimal GNOME packages installed successfully"
+    # Filter out already installed GNOME packages
+    filter_installed_packages "${gnome_packages[@]}"
+    
+    if [ ${#FILTERED_PACKAGES[@]} -eq 0 ]; then
+        print_status "All GNOME packages are already installed!"
+    else
+        print_status "Installing ${#FILTERED_PACKAGES[@]} GNOME packages (${#gnome_packages[@]} total, skipping already installed)..."
+        if sudo pacman -S --noconfirm "${FILTERED_PACKAGES[@]}"; then
+            print_status "Minimal GNOME packages installed successfully"
+        else
+            print_error "Failed to install some GNOME packages"
+        fi
+    fi
+    
+    # Enable gdm service if gdm is installed (regardless of whether we just installed it)
+    if pacman -Qi gdm &>/dev/null; then
         # Per user rule: only enable gdm when GNOME is selected
         if sudo systemctl enable gdm.service; then
             print_status "Enabled gdm.service to start at boot"
         else
             print_warning "Could not enable gdm.service. You may need to enable it manually."
         fi
-    else
-        print_error "Failed to install some GNOME packages"
     fi
 else
     print_status "Skipped GNOME installation"
@@ -287,16 +340,25 @@ if [[ ! $gnome_choice =~ ^[Yy]$ ]]; then
     read -p "Install and enable SDDM? [y/N]: " -r sddm_choice
     
     if [[ $sddm_choice =~ ^[Yy]$ ]]; then
-        print_status "Installing SDDM display manager..."
-        if sudo pacman -S --noconfirm sddm; then
-            print_status "SDDM installed successfully"
+        # Check if SDDM is already installed
+        if pacman -Qi sddm &>/dev/null; then
+            print_status "SDDM is already installed!"
+        else
+            print_status "Installing SDDM display manager..."
+            if sudo pacman -S --noconfirm sddm; then
+                print_status "SDDM installed successfully"
+            else
+                print_error "Failed to install SDDM"
+            fi
+        fi
+        
+        # Enable SDDM service if it's installed (regardless of whether we just installed it)
+        if pacman -Qi sddm &>/dev/null; then
             if sudo systemctl enable sddm.service; then
                 print_status "Enabled sddm.service to start at boot"
             else
                 print_warning "Could not enable sddm.service. You may need to enable it manually."
             fi
-        else
-            print_error "Failed to install SDDM"
         fi
     else
         print_status "Skipped SDDM installation"
