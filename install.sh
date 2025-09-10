@@ -467,3 +467,45 @@ print_warning "Original files backed up as:"
 print_warning "  - /etc/pacman.conf.backup"
 print_warning "  - /etc/pacman.d/mirrorlist.backup"
 print_warning "  - /etc/fstab.backup"
+
+echo ""
+if prompt_yes_no "do you rice?" "n"; then
+    echo ""
+    echo "which flavor?"
+    echo "1. caelestia"
+    echo "2. end-4"
+    echo "3. gh0stzk"
+    echo "4. hypryou"
+    echo ""
+    
+    while true; do
+        if [[ -r /dev/tty ]]; then
+            printf "Enter choice [1-4]: " >/dev/tty
+            read -r rice_choice </dev/tty 2>/dev/null || rice_choice=""
+        else
+            read -p "Enter choice [1-4]: " -r rice_choice
+        fi
+        
+        case $rice_choice in
+            1)
+                curl -fsSL https://github.com/arg9244/cachy-install/raw/main/rice/caelestia.sh | bash
+                break
+                ;;
+            2)
+                curl -fsSL https://github.com/arg9244/cachy-install/raw/main/rice/end-4.sh | bash
+                break
+                ;;
+            3)
+                curl -fsSL https://github.com/arg9244/cachy-install/raw/main/rice/gh0stzk.sh | bash
+                break
+                ;;
+            4)
+                curl -fsSL https://github.com/arg9244/cachy-install/raw/main/rice/hypryou | bash
+                break
+                ;;
+            *)
+                echo "Please enter 1, 2, 3, or 4"
+                ;;
+        esac
+    done
+fi
