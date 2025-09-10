@@ -8,6 +8,12 @@
 
 echo "Starting CachyOS TTY setup script..."
 
+# Enable debug mode if DEBUG=1 environment variable is set
+if [[ "$DEBUG" == "1" ]]; then
+    set -x
+    print_status() { echo -e "${GREEN}[DEBUG INFO]${NC} $1" >&2; }
+fi
+
 # Attach stdin to the terminal so prompts work even with curl | bash
 if [ ! -t 0 ] && [ -r /dev/tty ]; then
     exec 0</dev/tty
@@ -112,11 +118,15 @@ prompt_yes_no() {
     done
 }
 
+print_status "✓ Checkpoint 1: Starting pacman configuration..."
 print_status "Configuring pacman for optimal performance..."
 
 # Backup original pacman.conf
-sudo cp /etc/pacman.conf /etc/pacman.conf.backup
-print_status "Backed up original pacman.conf to /etc/pacman.conf.backup"
+if sudo cp /etc/pacman.conf /etc/pacman.conf.backup 2>/dev/null; then
+    print_status "Backed up original pacman.conf to /etc/pacman.conf.backup"
+else
+    print_warning "Could not backup pacman.conf, continuing anyway..."
+fi
 
 # Enable 16 parallel downloads in pacman.conf
 if grep -q "^ParallelDownloads" /etc/pacman.conf; then
@@ -140,6 +150,7 @@ if ! grep -q "^ILoveCandy" /etc/pacman.conf; then
     print_status "Enabled progress bar candy in pacman"
 fi
 
+print_status "✓ Checkpoint 2: Starting reflector installation..."
 print_status "Installing reflector for mirror optimization..."
 
 # Install reflector if not already installed
@@ -151,7 +162,11 @@ else
 fi
 
 print_status "Backing up current mirrorlist..."
-sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
+if sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup 2>/dev/null; then
+    print_status "Mirrorlist backed up successfully"
+else
+    print_warning "Could not backup mirrorlist, continuing anyway..."
+fi
 
 print_status "Finding fastest mirrors with reflector..."
 print_warning "This may take 1-3 minutes depending on your connection and mirror responsiveness..."
@@ -192,7 +207,11 @@ else
 fi
 
 print_status "Updating package database with new mirrors..."
-sudo pacman -Sy
+if sudo pacman -Sy 2>/dev/null; then
+    print_status "Package database updated successfully"
+else
+    print_warning "Package database update failed, continuing anyway..."
+fi
 
 print_status "Configuring fstab to automount specified drives..."
 
@@ -242,6 +261,7 @@ if ! grep -q "^MESA_SHADER_CACHE_MAX_SIZE=" /etc/environment; then
     print_status "Added MESA_SHADER_CACHE_MAX_SIZE=12G to /etc/environment"
 fi
 
+print_status "✓ Checkpoint 3: Starting essential packages installation..."
 print_status "Installing essential packages..."
 
 # Define essential packages array
@@ -305,6 +325,7 @@ if pacman -Qi transmission-cli &>/dev/null; then
     fi
 fi
 
+print_status "✓ Checkpoint 4: Starting optional package prompts..."
 # Optional package groups
 print_status "Optional package installation..."
 
