@@ -186,6 +186,14 @@ print_warning "This may take several minutes depending on your internet connecti
 # Install essential packages
 if pacman -S --noconfirm "${essential_packages[@]}"; then
     print_status "Essential packages installed successfully"
+    
+    # Enable transmission-daemon service
+    print_status "Enabling transmission-daemon service..."
+    if systemctl enable transmission-daemon.service; then
+        print_status "Enabled transmission-daemon.service to start at boot"
+    else
+        print_warning "Could not enable transmission-daemon.service. You may need to enable it manually."
+    fi
 else
     print_error "Failed to install some essential packages"
     print_error "You may need to install them manually later"
