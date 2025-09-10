@@ -25,10 +25,10 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if running as root
+# Check if running as root, if not, re-run with sudo
 if [[ $EUID -ne 0 ]]; then
-   print_error "This script must be run as root (use sudo)"
-   exit 1
+   print_status "Script requires root privileges. Requesting sudo access..."
+   exec sudo "$0" "$@"
 fi
 
 print_status "Configuring pacman for optimal performance..."
