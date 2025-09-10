@@ -14,10 +14,8 @@ if [[ "$DEBUG" == "1" ]]; then
     print_status() { echo -e "${GREEN}[DEBUG INFO]${NC} $1" >&2; }
 fi
 
-# Attach stdin to the terminal so prompts work even with curl | bash
-if [ ! -t 0 ] && [ -r /dev/tty ]; then
-    exec 0</dev/tty
-fi
+# For curl | bash execution, we need to handle stdin properly for prompts
+# We'll handle this in individual read commands instead of global redirection
 
 # Colors for output
 RED='\033[0;31m'
@@ -105,8 +103,15 @@ prompt_yes_no() {
     local default_ans="$2" # 'y' or 'n'
     local reply
     while true; do
-        # shellcheck disable=SC2162
-        read -p "$prompt_msg " -r reply || reply=""
+        # For curl | bash, try to read from /dev/tty if available
+        if [ -r /dev/tty ]; then
+            printf "%s " "$prompt_msg" >/dev/tty
+            read -r reply </dev/tty 2>/dev/null || reply=""
+        else
+            # Fallback for normal execution
+            read -p "$prompt_msg " -r reply || reply=""
+        fi
+        
         if [[ -z "$reply" ]]; then
             reply="$default_ans"
         fi
