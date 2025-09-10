@@ -117,29 +117,41 @@ print_status "Backing up current mirrorlist..."
 sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
 
 print_status "Finding fastest mirrors with reflector..."
-print_warning "This may take up to 30 seconds..."
+print_warning "This may take 1-3 minutes depending on your connection and mirror responsiveness..."
+print_warning "Will timeout after 1 minute if no response..."
 
-# Run reflector with specified parameters:
+# Run reflector with timeout mechanism
 # --latest 20: Use the 20 most recently synchronized mirrors
 # --protocol https: Only use HTTPS mirrors
 # --sort rate: Sort by download rate
 # --save: Save to mirrorlist
-# --connection-timeout 3: 3 second timeout for connections
-# --download-timeout 30: 30 second total timeout
-sudo reflector --latest 20 \
-          --protocol https \
-          --sort rate \
-          --save /etc/pacman.d/mirrorlist \
-          --connection-timeout 3 \
-          --download-timeout 30
+# --connection-timeout 5: 5 second timeout for connections
+# --download-timeout 60: 60 second total timeout
+(
+    timeout 60 sudo reflector --latest 20 \
+              --protocol https \
+              --sort rate \
+              --save /etc/pacman.d/mirrorlist \
+              --connection-timeout 5 \
+              --download-timeout 60
+) &
+REFLECTOR_PID=$!
 
-if [ $? -eq 0 ]; then
+# Wait for reflector to complete or timeout after 1 minute
+if wait $REFLECTOR_PID; then
     print_status "Mirror optimization completed successfully"
     print_status "Updated mirrorlist saved to /etc/pacman.d/mirrorlist"
 else
-    print_error "Mirror optimization failed, restoring backup"
+    REFLECTOR_EXIT_CODE=$?
+    if [ $REFLECTOR_EXIT_CODE -eq 124 ]; then
+        print_warning "Mirror optimization timed out after 1 minute"
+        print_warning "Restoring original mirrorlist and continuing..."
+    else
+        print_warning "Mirror optimization failed with exit code $REFLECTOR_EXIT_CODE"
+        print_warning "Restoring original mirrorlist and continuing..."
+    fi
     sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist
-    exit 1
+    print_status "Original mirrorlist restored - script will continue"
 fi
 
 print_status "Updating package database with new mirrors..."
