@@ -83,7 +83,7 @@ run_rice(){ local url="$1"; curl -fsSL "$url" | bash || print_warning "Rice fail
 # -------------------
 # ESSENTIAL PACKAGES
 # -------------------
-essential_packages=(git github-cli chezmoi nano micro fastfetch wget ntfs-3g baobab file-roller mpv transmission-cli transmission-remote-gtk neovim ripgrep gdu bottom nodejs lazygit python tree-sitter yazi kitty zen-browser-bin telegram-desktop ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
+essential_packages=(git github-cli chezmoi nano micro fastfetch starship wget ntfs-3g baobab file-roller mpv transmission-cli transmission-remote-gtk neovim ripgrep gdu bottom nodejs lazygit python tree-sitter yazi kitty zen-browser-bin telegram-desktop ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
 install_packages "Essential packages" "${essential_packages[@]}"
 pacman -Qi transmission-cli &>/dev/null && sudo systemctl enable transmission.service
 
