@@ -1,5 +1,5 @@
 #!/bin/bash
-# CachyOS Minimal Setup Script (Simplified & Cleaner)
+# CachyOS Fresh Install Setup Script
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 print_status(){ echo -e "${GREEN}[INFO]${NC} $1"; }
@@ -24,14 +24,42 @@ sudo sed -i 's/^#Color/Color/' /etc/pacman.conf
 grep -q "^ILoveCandy" /etc/pacman.conf || sudo sed -i '/^Color/a ILoveCandy' /etc/pacman.conf
 
 # -------------------
-# MIRRORS
+# REFLECTOR
 # -------------------
+print_status "✓ Installing reflector and optimizing mirrors..."
+if ! command -v reflector &>/dev/null; then
+    sudo pacman -S --needed --noconfirm reflector
+    print_status "Reflector installed successfully"
+else
+    print_status "Reflector is already installed"
+fi
+
 sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup 2>/dev/null
-timeout 60 sudo reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist || { print_warning "Mirror optimization failed"; sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist; }
+print_status "Finding fastest mirrors with reflector..."
+print_warning "This may take a few minutes depending on your connection..."
+sudo reflector \
+    --latest 20 \
+    --protocol https \
+    --sort rate \
+    --fastest 10 \
+    --threads 4 \
+    --connection-timeout 3 \
+    --download-timeout 5 \
+    --save /etc/pacman.d/mirrorlist
+
+# Verify mirrorlist
+if [ ! -s /etc/pacman.d/mirrorlist ]; then
+    print_warning "Mirrorlist is empty! Restoring backup..."
+    sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist
+else
+    print_status "Updated mirrorlist saved to /etc/pacman.d/mirrorlist"
+fi
+
+print_status "Updating package database..."
 sudo pacman -Sy --noconfirm
 
 # -------------------
-# FUNCTIONS
+# HELPER FUNCTIONS
 # -------------------
 filter_installed_packages(){
     local packages=("$@"); FILTERED_PACKAGES=()
@@ -42,9 +70,6 @@ install_packages(){
     [ ${#FILTERED_PACKAGES[@]} -gt 0 ] && sudo pacman -S --needed --noconfirm "${FILTERED_PACKAGES[@]}" && print_status "$group_name installed" || print_status "All $group_name already installed"
 }
 append_fstab_line(){ local line="$1"; grep -qxF "$line" /etc/fstab || echo "$line" | sudo tee -a /etc/fstab > /dev/null; }
-
-run_rice(){ local url="$1"; curl -fsSL "$url" | bash || print_warning "Rice failed: $url"; }
-
 prompt_yes_no(){
     local msg="$1" default="$2" reply
     while true; do
@@ -53,9 +78,10 @@ prompt_yes_no(){
         case $reply in [Yy]*) return 0;; [Nn]*) return 1;; *) print_warning "y/n only";; esac
     done
 }
+run_rice(){ local url="$1"; curl -fsSL "$url" | bash || print_warning "Rice failed: $url"; }
 
 # -------------------
-# ESSENTIALS
+# ESSENTIAL PACKAGES
 # -------------------
 essential_packages=(git github-cli chezmoi nano micro fastfetch wget ntfs-3g baobab file-roller mpv transmission-cli transmission-remote-gtk neovim ripgrep gdu bottom nodejs lazygit python tree-sitter yazi kitty zen-browser-bin telegram-desktop ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
 install_packages "Essential packages" "${essential_packages[@]}"
@@ -72,13 +98,13 @@ sudo mkdir -p /mnt/C /mnt/D /mnt/E
 pacman -Qi ntfs-3g &>/dev/null && sudo mount -a
 
 # -------------------
-# ENVIRONMENT
+# ENVIRONMENT VARIABLES
 # -------------------
 grep -q "^AMD_VULKAN_ICD=" /etc/environment || echo "AMD_VULKAN_ICD=RADV" | sudo tee -a /etc/environment
 grep -q "^MESA_SHADER_CACHE_MAX_SIZE=" /etc/environment || echo "MESA_SHADER_CACHE_MAX_SIZE=12G" | sudo tee -a /etc/environment
 
 # -------------------
-# OPTIONAL GROUPS
+# OPTIONAL PACKAGES
 # -------------------
 gaming_packages=(cachyos-gaming-meta gamescope goverlay lutris)
 prompt_yes_no "Install gaming packages? [y/N]:" "n" && install_packages "Gaming packages" "${gaming_packages[@]}"
@@ -99,7 +125,7 @@ fi
 command -v chezmoi &>/dev/null && chezmoi init --apply https://github.com/arg9244/dotfiles.git || print_warning "chezmoi missing"
 
 # -------------------
-# RICE
+# RICE SCRIPTS
 # -------------------
 sudo mount -a
 if prompt_yes_no "Do you rice?" "n"; then
@@ -114,4 +140,7 @@ if prompt_yes_no "Do you rice?" "n"; then
     esac
 fi
 
-print_status "Setup completed!"
+print_status "CachyOS setup script completed successfully!"
+print_status "Pacman configured with 10 parallel downloads, fastest mirrors, color, and ILoveCandy"
+print_status "Automount configured for /mnt/C, /mnt/D, /mnt/E"
+print_warning "Backups: /etc/pacman.conf.backup, /etc/pacman.d/mirrorlist.backup, /etc/fstab.backup"
