@@ -6,7 +6,7 @@
 # Note: Removed 'set -e' to prevent early exit on non-critical failures
 # Individual commands have proper error handling instead
 
-echo "Starting CachyOS TTY setup script..."
+echo "Starting CachyOS setup script..."
 
 # Enable debug mode if DEBUG=1 environment variable is set
 if [[ "$DEBUG" == "1" ]]; then
@@ -275,6 +275,7 @@ essential_packages=(
     github-cli
     chezmoi
     nano
+    micro
     fastfetch
     wget
     ntfs-3g
@@ -294,8 +295,12 @@ essential_packages=(
     yazi
     kitty
     zen-browser-bin
+    telegram-desktop
     ttf-jetbrains-mono-nerd
-    ttf-meslo-nerd
+    qt5ct
+    qt6ct
+    kvantum
+    kvantum-qt5
 )
 
 # Filter out already installed packages
@@ -371,6 +376,7 @@ gnome_packages=(
     resources
     gnome-calendar
     gnome-weather
+    ghostty
 )
 
 echo -e "\n${YELLOW}[OPTIONAL]${NC} Install minimal GNOME desktop environment?"

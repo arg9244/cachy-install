@@ -110,7 +110,6 @@ main() {
   install_packages
   enable_greetd
   log "Installation complete."
-  log "Notes: Do not enable SDDM/GDM alongside greetd. If you use GNOME on this system, enable only GDM per your rule."
 }
 
 main "$@"
