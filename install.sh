@@ -83,7 +83,7 @@ run_rice(){ local url="$1"; curl -fsSL "$url" | bash || print_warning "Rice fail
 # -------------------
 # ESSENTIAL PACKAGES
 # -------------------
-essential_packages=(git github-cli chezmoi nano micro fastfetch starship wget ntfs-3g baobab file-roller mpv transmission-cli transmission-remote-gtk neovim ripgrep gdu bottom nodejs lazygit python tree-sitter yazi kitty zen-browser-bin telegram-desktop ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
+essential_packages=(git github-cli chezmoi micro fastfetch starship wget ntfs-3g file-roller mpv transmission-cli transmission-remote-gtk neovim ripgrep gdu bottom nodejs lazygit python tree-sitter yazi kitty zen-browser-bin telegram-desktop ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
 install_packages "Essential packages" "${essential_packages[@]}"
 pacman -Qi transmission-cli &>/dev/null && sudo systemctl enable transmission.service
 
@@ -106,8 +106,13 @@ grep -q "^MESA_SHADER_CACHE_MAX_SIZE=" /etc/environment || echo "MESA_SHADER_CAC
 # -------------------
 # OPTIONAL PACKAGES
 # -------------------
-gaming_packages=(cachyos-gaming-meta gamescope goverlay lutris)
-prompt_yes_no "Install gaming packages? [y/N]:" "n" && install_packages "Gaming packages" "${gaming_packages[@]}"
+gaming_packages=(umu-launcher goverlay vulkan-tools lutris)
+prompt_yes_no "Install gaming packages? [y/N]:" "n" && {
+    # install proton-cachyos without dependencies
+    pacman -Qi proton-cachyos &>/dev/null || sudo pacman -Sdd --noconfirm proton-cachyos
+    # install remaining gaming packages normally
+    install_packages "Gaming packages" "${gaming_packages[@]}"
+}
 
 gnome_packages=(gdm gnome-control-center extension-manager loupe resources gnome-calendar gnome-weather ghostty)
 gnome_choice="n"
