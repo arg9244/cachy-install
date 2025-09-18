@@ -83,9 +83,9 @@ run_rice(){ local url="$1"; curl -fsSL "$url" | bash || print_warning "Rice fail
 # -------------------
 # ESSENTIAL PACKAGES
 # -------------------
-essential_packages=(git github-cli chezmoi micro fastfetch starship wget ntfs-3g file-roller mpv loupe neovim ripgrep gdu bottom nodejs lazygit python yazi kitty zen-browser-bin v2rayn-bin ayugram-desktop proxychains-ng nm-connection-editor ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
+essential_packages=(git github-cli chezmoi micro fastfetch starship wget ntfs-3g file-roller mpv loupe neovim ripgrep gdu bottom nodejs lazygit python yazi kitty zen-browser-bin aria2d v2rayn-bin ayugram-desktop proxychains-ng nm-connection-editor ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
 install_packages "Essential packages" "${essential_packages[@]}"
-pacman -Qi transmission-cli &>/dev/null && sudo systemctl enable transmission.service
+pacman -Qi aria2d &>/dev/null && sudo systemctl enable aria2d
 
 # -------------------
 # AUTOMOUNT
@@ -93,7 +93,6 @@ pacman -Qi transmission-cli &>/dev/null && sudo systemctl enable transmission.se
 sudo cp /etc/fstab /etc/fstab.backup
 sudo mkdir -p /mnt/C /mnt/D /mnt/E
 [[ -b /dev/sda1 ]] && append_fstab_line "/dev/sda1 /mnt/D auto defaults,nofail 0 0"
-[[ -b /dev/sdb3 ]] && append_fstab_line "/dev/sdb3 /mnt/E auto defaults,nofail 0 0"
 [[ -b /dev/nvme0n1p3 ]] && append_fstab_line "/dev/nvme0n1p3 /mnt/C auto defaults,nofail 0 0"
 pacman -Qi ntfs-3g &>/dev/null && sudo mount -a
 
@@ -114,7 +113,7 @@ prompt_yes_no "Install gaming packages? [y/N]:" "n" && {
     install_packages "Gaming packages" "${gaming_packages[@]}"
 }
 
-gnome_packages=(gdm gnome-control-center extension-manager loupe resources gnome-calendar gnome-weather ghostty)
+gnome_packages=(gdm gnome-control-center extension-manager loupe gnome-calendar gnome-weather ghostty)
 gnome_choice="n"
 if prompt_yes_no "Install minimal GNOME? [y/N]:" "n"; then
     gnome_choice="y"
