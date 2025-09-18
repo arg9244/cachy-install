@@ -130,7 +130,16 @@ command -v chezmoi &>/dev/null && chezmoi init --apply https://github.com/arg924
 # -------------------
 # ENABLE SERVICES
 # -------------------
-pacman -Qi aria2 &>/dev/null && systemctl --user enable --now aria2.service
+if pacman -Qi aria2 &>/dev/null; then
+    # Ensure aria2 session directory exists
+    mkdir -p /home/reza/.config/aria2
+
+    # Create empty session file if it doesn't exist
+    [[ ! -f /home/reza/.config/aria2/aria2.session ]] && touch /home/reza/.config/aria2/aria2.session
+
+    # Enable and start aria2 service for the user
+    systemctl --user enable --now aria2.service
+fi
 
 # -------------------
 # RICE SCRIPTS
