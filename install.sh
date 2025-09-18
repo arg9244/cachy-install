@@ -83,9 +83,8 @@ run_rice(){ local url="$1"; curl -fsSL "$url" | bash || print_warning "Rice fail
 # -------------------
 # ESSENTIAL PACKAGES
 # -------------------
-essential_packages=(git github-cli chezmoi micro fastfetch starship wget ntfs-3g file-roller mpv loupe neovim ripgrep gdu bottom nodejs lazygit python yazi kitty zen-browser-bin aria2d v2rayn-bin ayugram-desktop proxychains-ng nm-connection-editor ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
+essential_packages=(git github-cli chezmoi micro fastfetch starship wget ntfs-3g file-roller mpv loupe neovim ripgrep gdu bottom nodejs lazygit python yazi kitty zen-browser-bin aria2 v2rayn-bin ayugram-desktop proxychains-ng nm-connection-editor ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
 install_packages "Essential packages" "${essential_packages[@]}"
-pacman -Qi aria2d &>/dev/null && sudo systemctl enable aria2d
 
 # -------------------
 # AUTOMOUNT
@@ -127,6 +126,11 @@ fi
 # DOTFILES
 # -------------------
 command -v chezmoi &>/dev/null && chezmoi init --apply https://github.com/arg9244/dotfiles.git || print_warning "chezmoi missing"
+
+# -------------------
+# ENABLE SERVICES
+# -------------------
+pacman -Qi aria2 &>/dev/null && systemctl --user enable --now aria2.service
 
 # -------------------
 # RICE SCRIPTS
