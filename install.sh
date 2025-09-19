@@ -83,7 +83,7 @@ run_rice(){ local url="$1"; curl -fsSL "$url" | bash || print_warning "Rice fail
 # -------------------
 # ESSENTIAL PACKAGES
 # -------------------
-essential_packages=(git github-cli chezmoi micro fastfetch starship wget ntfs-3g file-roller mpv loupe neovim ripgrep gdu bottom nodejs lazygit python yazi kitty zen-browser-bin aria2 v2rayn-bin ayugram-desktop proxychains-ng nm-connection-editor ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
+essential_packages=(git github-cli chezmoi micro fastfetch starship wget ntfs-3g file-roller mpv loupe neovim ripgrep gdu bottom nodejs lazygit python yazi kitty zen-browser-bin aria2 yt-dlp v2rayn-bin ayugram-desktop proxychains-ng nm-connection-editor ttf-jetbrains-mono-nerd qt5ct qt6ct kvantum kvantum-qt5)
 install_packages "Essential packages" "${essential_packages[@]}"
 
 # -------------------
